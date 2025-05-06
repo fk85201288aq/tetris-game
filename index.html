@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>俄罗斯方块</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #2c3e50;
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        .game-container {
+            margin-top: 20px;
+            max-width: 100%;
+            padding: 0 10px;
+        }
+        canvas {
+            border: 2px solid #34495e;
+            background-color: #2c3e50;
+            max-width: 100%;
+            height: auto;
+        }
+        .game-info {
+            color: white;
+            margin-top: 20px;
+            font-size: 24px;
+            text-align: center;
+        }
+        .controls {
+            color: white;
+            margin: 20px 0;
+            text-align: center;
+            font-size: 16px;
+        }
+        .game-buttons {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+            justify-content: center;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        button.active {
+            background-color: #27ae60;
+        }
+        button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        .difficulty {
+            margin: 10px 0;
+        }
+        @media (max-width: 600px) {
+            .controls .desktop-only {
+                display: none;
+            }
+        }
+        .mobile-controls {
+            display: none;
+            color: white;
+            margin-top: 10px;
+            text-align: center;
+        }
+        @media (max-width: 600px) {
+            .mobile-controls {
+                display: block;
+            }
+            .game-buttons {
+                flex-wrap: wrap;
+            }
+            button {
+                padding: 8px 16px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="game-buttons">
+            <button id="pause">暂停</button>
+            <button id="easy" class="active">简单</button>
+            <button id="medium">中等</button>
+            <button id="hard">困难</button>
+        </div>
+        <canvas id="tetris" width="300" height="600"></canvas>
+        <div class="game-info">
+            <p>分数: <span id="score">0</span></p>
+            <p>时间: <span id="time">00:00</span></p>
+            <p>速度: <span id="speed">1.0</span>x</p>
+        </div>
+        <div class="controls desktop-only">
+            <p>键盘控制:</p>
+            <p>← → : 左右移动</p>
+            <p>↑ : 旋转</p>
+            <p>↓ : 加速下落</p>
+            <p>空格 : 直接落下</p>
+            <p>P : 暂停游戏</p>
+        </div>
+        <div class="mobile-controls">
+            <p>触摸控制:</p>
+            <p>左/右侧: 左右移动</p>
+            <p>上方: 旋转</p>
+            <p>中间: 加速下落</p>
+            <p>下方: 直接落下</p>
+        </div>
+    </div>
+    <script src="tetris.js"></script>
+</body>
+</html> 
