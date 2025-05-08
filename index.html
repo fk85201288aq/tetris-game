@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>俄罗斯方块</title>
     <style>
         body {
@@ -17,6 +17,7 @@
             -webkit-touch-callout: none;
             -webkit-user-select: none;
             user-select: none;
+            overflow-x: hidden;
         }
         .game-wrapper {
             display: flex;
@@ -26,6 +27,7 @@
             padding: 20px;
             max-width: 1400px;
             width: 100%;
+            box-sizing: border-box;
         }
         .game-container {
             flex: 0 0 auto;
@@ -155,43 +157,105 @@
             .game-wrapper {
                 flex-direction: column;
                 align-items: center;
+                padding: 10px;
+                gap: 15px;
             }
             .side-panel {
                 flex: 0 0 auto;
-                width: 100%;
+                width: calc(100% - 20px);
                 max-width: 400px;
-                margin: 10px 0;
+                margin: 5px 0;
+                padding: 15px;
+                box-sizing: border-box;
             }
-            canvas {
-                width: 350px;
-                height: 700px;
+            canvas#tetris {
+                width: calc(100vw - 40px);
+                max-width: 350px;
+                height: calc((100vw - 40px) * 2);
+                max-height: 700px;
             }
             .virtual-controls {
-                margin-top: 20px;
+                margin-top: 10px;
             }
         }
 
         @media (max-width: 768px) {
-            canvas {
-                width: 300px;
-                height: 600px;
+            .game-wrapper {
+                padding: 5px;
+                gap: 10px;
+            }
+            .side-panel {
+                padding: 10px;
+                font-size: 14px;
+            }
+            canvas#tetris {
+                width: calc(100vw - 20px);
+                max-width: 300px;
+                height: calc((100vw - 20px) * 2);
+                max-height: 600px;
             }
             .virtual-btn {
                 width: 50px;
                 height: 50px;
                 font-size: 24px;
             }
+            h2 {
+                font-size: 18px;
+                margin: 10px 0;
+            }
+            h3 {
+                font-size: 16px;
+                margin: 8px 0;
+            }
+            p {
+                margin: 5px 0;
+            }
+            .game-info {
+                font-size: 18px;
+            }
         }
 
         @media (max-width: 480px) {
+            .game-wrapper {
+                padding: 5px;
+                gap: 8px;
+            }
+            .side-panel {
+                padding: 8px;
+                font-size: 12px;
+            }
+            canvas#tetris {
+                width: calc(100vw - 10px);
+                max-width: 280px;
+                height: calc((100vw - 10px) * 2);
+                max-height: 560px;
+            }
             .virtual-controls {
                 gap: 8px;
-                padding: 10px;
+                padding: 8px;
             }
             .virtual-btn {
                 width: 45px;
                 height: 45px;
                 font-size: 20px;
+            }
+            .game-buttons button {
+                padding: 8px 16px;
+                font-size: 14px;
+            }
+            #nextPiece {
+                width: 120px;
+                height: 120px;
+            }
+        }
+
+        @media (max-height: 800px) {
+            .game-wrapper {
+                padding-top: 5px;
+            }
+            .side-panel {
+                max-height: 90vh;
+                overflow-y: auto;
             }
         }
     </style>
