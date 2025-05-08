@@ -2,28 +2,35 @@ class Tetris {
     constructor(canvas) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
-        this.gridSize = 30;
-        this.cols = canvas.width / this.gridSize;
-        this.rows = canvas.height / this.gridSize;
+        this.nextPieceCanvas = document.getElementById('nextPiece');
+        this.nextPieceCtx = this.nextPieceCanvas.getContext('2d');
+        this.gridSize = 40;
+        this.nextPieceGridSize = 40;
+        this.cols = Math.floor(canvas.width / this.gridSize);
+        this.rows = Math.floor(canvas.height / this.gridSize);
         this.grid = Array(this.rows).fill().map(() => Array(this.cols).fill(0));
         this.score = 0;
         this.gameOver = false;
         this.isPaused = false;
         this.currentPiece = null;
+        this.nextPiece = null;
         this.ghostPieceY = 0;
         this.startTime = Date.now();
         this.elapsedTime = 0;
-        this.baseSpeed = 1000; // 基础下落速度（毫秒）
-        this.currentSpeed = this.baseSpeed;
-        this.speedMultiplier = 1.0;
-        this.difficulty = 'easy'; // 难度设置
+        this.lastDropTime = Date.now();
+        this.lastMoveTime = Date.now();
+        this.moveDelay = 50; // 移动延迟（毫秒）
+        this.keysPressed = new Set();
+        
+        // 从 localStorage 获取保存的难度，如果没有则默认为 'easy'
+        this.difficulty = localStorage.getItem('tetris-difficulty') || 'easy';
         
         // 难度配置
         this.difficultySettings = {
             easy: {
                 baseSpeed: 1000,
-                speedIncrease: 0.1,  // 每分钟增加的速度倍数
-                speedCap: 2.0        // 最大速度倍数
+                speedIncrease: 0.1,
+                speedCap: 2.0
             },
             medium: {
                 baseSpeed: 800,
@@ -36,6 +43,12 @@ class Tetris {
                 speedCap: 5.0
             }
         };
+
+        // 设置初始速度
+        const settings = this.difficultySettings[this.difficulty];
+        this.baseSpeed = settings.baseSpeed;
+        this.currentSpeed = this.baseSpeed;
+        this.speedMultiplier = 1.0;
         
         // 定义方块形状
         this.shapes = [
@@ -55,10 +68,26 @@ class Tetris {
             '#3877FF'
         ];
 
+        this.clearingLines = []; // 正在消除的行
+        this.clearAnimation = {
+            active: false,
+            startTime: 0,
+            duration: 500, // 动画持续时间（毫秒）
+            lines: []
+        };
+
         this.bindControls();
         this.bindButtons();
+        this.bindVirtualControls();
+        this.generateNextPiece();
         this.createNewPiece();
-        this.update();
+        this.gameLoop();
+        
+        // 设置正确的难度按钮状态
+        document.querySelectorAll('#easy, #medium, #hard').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.getElementById(this.difficulty).classList.add('active');
     }
 
     bindButtons() {
@@ -71,8 +100,6 @@ class Tetris {
         difficulties.forEach(diff => {
             const btn = document.getElementById(diff);
             btn.addEventListener('click', () => {
-                if (!this.isPaused && !this.gameOver) return; // 只能在暂停或游戏结束时更改难度
-                
                 difficulties.forEach(d => {
                     document.getElementById(d).classList.remove('active');
                 });
@@ -83,12 +110,10 @@ class Tetris {
     }
 
     setDifficulty(difficulty) {
-        this.difficulty = difficulty;
-        const settings = this.difficultySettings[difficulty];
-        this.baseSpeed = settings.baseSpeed;
-        this.currentSpeed = this.baseSpeed;
-        this.speedMultiplier = 1.0;
-        this.updateSpeedDisplay();
+        // 将选择的难度保存到 localStorage
+        localStorage.setItem('tetris-difficulty', difficulty);
+        // 刷新页面
+        window.location.reload();
     }
 
     togglePause() {
@@ -98,7 +123,7 @@ class Tetris {
         pauseBtn.style.backgroundColor = this.isPaused ? '#27ae60' : '#3498db';
         
         if (!this.isPaused) {
-            this.update();
+            this.gameLoop();
         }
     }
 
@@ -170,23 +195,11 @@ class Tetris {
 
             if (this.isPaused) return;
             
-            switch(e.keyCode) {
-                case 37: // 左箭头
-                    this.movePiece(-1, 0);
-                    break;
-                case 39: // 右箭头
-                    this.movePiece(1, 0);
-                    break;
-                case 40: // 下箭头
-                    this.movePiece(0, 1);
-                    break;
-                case 38: // 上箭头
-                    this.rotatePiece();
-                    break;
-                case 32: // 空格
-                    this.dropPiece();
-                    break;
-            }
+            this.keysPressed.add(e.keyCode);
+        });
+
+        document.addEventListener('keyup', (e) => {
+            this.keysPressed.delete(e.keyCode);
         });
 
         // 添加触摸控制
@@ -194,19 +207,115 @@ class Tetris {
         this.canvas.addEventListener('touchmove', (e) => e.preventDefault());
     }
 
-    createNewPiece() {
+    bindVirtualControls() {
+        const buttons = {
+            up: () => this.rotatePiece(),
+            left: () => this.movePiece(-1, 0),
+            right: () => this.movePiece(1, 0),
+            down: () => this.movePiece(0, 1),
+            drop: () => this.dropPiece()
+        };
+
+        // 为每个虚拟按钮添加事件监听
+        Object.keys(buttons).forEach(key => {
+            const btn = document.querySelector(`.virtual-btn.${key}`);
+            if (btn) {
+                // 触摸开始事件
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    if (!this.gameOver && !this.isPaused) {
+                        buttons[key]();
+                    }
+                });
+
+                // 鼠标点击事件（为了支持桌面端测试）
+                btn.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    if (!this.gameOver && !this.isPaused) {
+                        buttons[key]();
+                    }
+                });
+            }
+        });
+
+        // 防止触摸滑动
+        document.querySelector('.virtual-controls').addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        }, { passive: false });
+    }
+
+    generateNextPiece() {
         const shapeIndex = Math.floor(Math.random() * this.shapes.length);
         const shape = this.shapes[shapeIndex];
-        this.currentPiece = {
+        return {
             shape,
             color: this.colors[shapeIndex],
             x: Math.floor(this.cols / 2) - Math.floor(shape[0].length / 2),
             y: 0
         };
+    }
+
+    createNewPiece() {
+        if (!this.nextPiece) {
+            this.nextPiece = this.generateNextPiece();
+        }
+        this.currentPiece = this.nextPiece;
+        this.nextPiece = this.generateNextPiece();
+        this.drawNextPiece();
 
         if (this.checkCollision()) {
             this.gameOver = true;
         }
+    }
+
+    drawNextPiece() {
+        const ctx = this.nextPieceCtx;
+        const gridSize = this.nextPieceGridSize;
+        
+        // 清除画布
+        ctx.clearRect(0, 0, this.nextPieceCanvas.width, this.nextPieceCanvas.height);
+        
+        const shape = this.nextPiece.shape;
+        const color = this.nextPiece.color;
+        
+        // 计算居中位置
+        const shapeWidth = shape[0].length * gridSize;
+        const shapeHeight = shape.length * gridSize;
+        const startX = (this.nextPieceCanvas.width - shapeWidth) / 2;
+        const startY = (this.nextPieceCanvas.height - shapeHeight) / 2;
+        
+        // 绘制方块
+        for (let y = 0; y < shape.length; y++) {
+            for (let x = 0; x < shape[y].length; x++) {
+                if (shape[y][x]) {
+                    this.drawPreviewBlock(
+                        startX + x * gridSize,
+                        startY + y * gridSize,
+                        gridSize,
+                        color
+                    );
+                }
+            }
+        }
+    }
+
+    drawPreviewBlock(x, y, size, color) {
+        const ctx = this.nextPieceCtx;
+        const borderWidth = 2;
+        
+        // 主体颜色
+        ctx.fillStyle = color;
+        ctx.fillRect(x + borderWidth, y + borderWidth, size - 2 * borderWidth, size - 2 * borderWidth);
+        
+        // 亮边
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.fillRect(x + borderWidth, y + borderWidth, size - 2 * borderWidth, 4);
+        ctx.fillRect(x + borderWidth, y + borderWidth, 4, size - 2 * borderWidth);
+        
+        // 暗边
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fillRect(x + size - 6, y + borderWidth, 4, size - 2 * borderWidth);
+        ctx.fillRect(x + borderWidth, y + size - 6, size - 2 * borderWidth, 4);
     }
 
     checkCollision(offsetX = 0, offsetY = 0, newShape = null) {
@@ -277,19 +386,38 @@ class Tetris {
 
     clearLines() {
         let linesCleared = 0;
+        let linesToClear = [];
 
+        // 检查需要消除的行
         for (let y = this.rows - 1; y >= 0; y--) {
             if (this.grid[y].every(cell => cell !== 0)) {
-                this.grid.splice(y, 1);
-                this.grid.unshift(Array(this.cols).fill(0));
+                linesToClear.push(y);
                 linesCleared++;
-                y++;
             }
         }
 
         if (linesCleared > 0) {
+            // 启动消除动画
+            this.clearAnimation = {
+                active: true,
+                startTime: Date.now(),
+                duration: 500,
+                lines: linesToClear
+            };
+
+            // 更新分数
             this.score += linesCleared * 100;
             document.getElementById('score').textContent = this.score;
+
+            // 延迟实际的行消除
+            setTimeout(() => {
+                // 实际移除行
+                linesToClear.forEach(y => {
+                    this.grid.splice(y, 1);
+                    this.grid.unshift(Array(this.cols).fill(0));
+                });
+                this.clearAnimation.active = false;
+            }, this.clearAnimation.duration);
         }
     }
 
@@ -313,7 +441,36 @@ class Tetris {
         for (let y = 0; y < this.rows; y++) {
             for (let x = 0; x < this.cols; x++) {
                 if (this.grid[y][x]) {
-                    this.drawBlock(x, y, this.grid[y][x]);
+                    if (this.clearAnimation.active && this.clearAnimation.lines.includes(y)) {
+                        const progress = (Date.now() - this.clearAnimation.startTime) / this.clearAnimation.duration;
+                        if (progress <= 1) {
+                            // 闪烁两次
+                            const alpha = Math.abs(Math.sin(progress * Math.PI * 2));
+                            const color = this.grid[y][x];
+                            const baseColor = color.substring(0, 7);
+                            this.drawBlock(x, y, baseColor + Math.floor(alpha * 255).toString(16).padStart(2, '0'));
+                            
+                            // 缩放效果
+                            const scale = 1 - progress;
+                            if (scale > 0) {
+                                this.ctx.save();
+                                this.ctx.globalAlpha = scale;
+                                this.ctx.translate(
+                                    x * this.gridSize + this.gridSize / 2,
+                                    y * this.gridSize + this.gridSize / 2
+                                );
+                                this.ctx.scale(scale, scale);
+                                this.ctx.translate(
+                                    -x * this.gridSize - this.gridSize / 2,
+                                    -y * this.gridSize - this.gridSize / 2
+                                );
+                                this.drawBlock(x, y, this.grid[y][x]);
+                                this.ctx.restore();
+                            }
+                        }
+                    } else {
+                        this.drawBlock(x, y, this.grid[y][x]);
+                    }
                 }
             }
         }
@@ -397,18 +554,46 @@ class Tetris {
         );
     }
 
-    update() {
+    handleInput() {
+        if (this.isPaused || this.gameOver) return;
+
+        const now = Date.now();
+        if (now - this.lastMoveTime >= this.moveDelay) {
+            if (this.keysPressed.has(37)) { // 左箭头
+                this.movePiece(-1, 0);
+            }
+            if (this.keysPressed.has(39)) { // 右箭头
+                this.movePiece(1, 0);
+            }
+            if (this.keysPressed.has(40)) { // 下箭头
+                this.movePiece(0, 1);
+            }
+            if (this.keysPressed.has(38)) { // 上箭头
+                this.rotatePiece();
+            }
+            if (this.keysPressed.has(32)) { // 空格
+                this.dropPiece();
+            }
+            this.lastMoveTime = now;
+        }
+    }
+
+    gameLoop() {
         if (!this.gameOver && !this.isPaused) {
+            this.handleInput();
             this.updateTimer();
-            if (!this.movePiece(0, 1)) {
-                this.mergePiece();
-                this.createNewPiece();
+
+            const now = Date.now();
+            if (now - this.lastDropTime >= this.currentSpeed) {
+                if (!this.movePiece(0, 1)) {
+                    this.mergePiece();
+                    this.createNewPiece();
+                }
+                this.lastDropTime = now;
             }
         }
         this.draw();
-        if (!this.gameOver && !this.isPaused) {
-            setTimeout(() => this.update(), this.currentSpeed);
-        }
+        requestAnimationFrame(() => this.gameLoop());
     }
 
     getGhostPiecePosition() {
