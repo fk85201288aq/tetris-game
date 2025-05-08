@@ -8,16 +8,17 @@
         body {
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-start;
             background-color: #2c3e50;
             margin: 0;
             min-height: 100vh;
             font-family: Arial, sans-serif;
-            touch-action: none;
+            touch-action: pan-y;
             -webkit-touch-callout: none;
             -webkit-user-select: none;
             user-select: none;
             overflow-x: hidden;
+            padding-bottom: env(safe-area-inset-bottom);
         }
         .game-wrapper {
             display: flex;
@@ -28,12 +29,67 @@
             max-width: 1400px;
             width: 100%;
             box-sizing: border-box;
+            position: relative;
         }
         .game-container {
             flex: 0 0 auto;
             display: flex;
             flex-direction: column;
             align-items: center;
+            position: relative;
+        }
+        .layout-controls {
+            position: fixed;
+            bottom: max(env(safe-area-inset-bottom), 10px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+        }
+        .layout-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 15px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .layout-btn.active {
+            background: #27ae60;
+        }
+        .controls-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            box-sizing: border-box;
+            z-index: 999;
+            transition: transform 0.3s ease;
+            padding-bottom: max(env(safe-area-inset-bottom), 10px);
+        }
+        .controls-container.hidden {
+            transform: translateY(100%);
+        }
+        .controls-handle {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 4px;
+            background: white;
+            border-radius: 2px;
+            cursor: grab;
         }
         .side-panel {
             flex: 0 0 250px;
@@ -159,14 +215,17 @@
                 align-items: center;
                 padding: 10px;
                 gap: 15px;
+                height: auto;
+                min-height: 100vh;
             }
             .side-panel {
-                flex: 0 0 auto;
+                position: relative;
                 width: calc(100% - 20px);
                 max-width: 400px;
                 margin: 5px 0;
                 padding: 15px;
                 box-sizing: border-box;
+                max-height: none;
             }
             canvas#tetris {
                 width: calc(100vw - 40px);
@@ -174,25 +233,34 @@
                 height: calc((100vw - 40px) * 2);
                 max-height: 700px;
             }
+            .controls-container {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                width: 100%;
+            }
             .virtual-controls {
-                margin-top: 10px;
+                margin: 0 auto;
+                max-width: 400px;
             }
         }
 
         @media (max-width: 768px) {
-            .game-wrapper {
-                padding: 5px;
-                gap: 10px;
+            body {
+                overflow-y: auto;
             }
-            .side-panel {
-                padding: 10px;
-                font-size: 14px;
+            .game-wrapper {
+                min-height: calc(100vh - 100px);
             }
             canvas#tetris {
                 width: calc(100vw - 20px);
                 max-width: 300px;
                 height: calc((100vw - 20px) * 2);
                 max-height: 600px;
+            }
+            .side-panel {
+                overflow-y: auto;
+                max-height: 30vh;
             }
             .virtual-btn {
                 width: 50px;
@@ -311,6 +379,76 @@
             </div>
         </div>
     </div>
+    <div class="layout-controls">
+        <button class="layout-btn" id="toggleControls">显示/隐藏控制区</button>
+        <button class="layout-btn" id="toggleInfo">显示/隐藏信息</button>
+    </div>
+    <div class="controls-container">
+        <div class="controls-handle"></div>
+        <div class="virtual-controls">
+            <button class="virtual-btn up">↻</button>
+            <button class="virtual-btn left">←</button>
+            <button class="virtual-btn down">↓</button>
+            <button class="virtual-btn right">→</button>
+            <button class="virtual-btn drop">⤓</button>
+        </div>
+    </div>
     <script src="tetris.js"></script>
+    <script>
+        // 控制区域的显示和隐藏
+        const controlsContainer = document.querySelector('.controls-container');
+        const toggleControlsBtn = document.getElementById('toggleControls');
+        const toggleInfoBtn = document.getElementById('toggleInfo');
+        const sidePanels = document.querySelectorAll('.side-panel');
+        
+        let isDragging = false;
+        let startY = 0;
+        let startHeight = 0;
+        
+        toggleControlsBtn.addEventListener('click', () => {
+            controlsContainer.classList.toggle('hidden');
+            toggleControlsBtn.classList.toggle('active');
+        });
+        
+        toggleInfoBtn.addEventListener('click', () => {
+            sidePanels.forEach(panel => {
+                panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+            });
+            toggleInfoBtn.classList.toggle('active');
+        });
+        
+        // 控制区域的拖动
+        const handle = document.querySelector('.controls-handle');
+        
+        handle.addEventListener('touchstart', (e) => {
+            isDragging = true;
+            startY = e.touches[0].clientY;
+            controlsContainer.style.transition = 'none';
+        });
+        
+        document.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            
+            const deltaY = startY - e.touches[0].clientY;
+            const newHeight = Math.max(100, Math.min(300, deltaY + 200)); // 限制高度在100-300px之间
+            
+            controlsContainer.style.height = `${newHeight}px`;
+        });
+        
+        document.addEventListener('touchend', () => {
+            isDragging = false;
+            controlsContainer.style.transition = 'transform 0.3s ease';
+        });
+        
+        // 初始化显示状态
+        document.addEventListener('DOMContentLoaded', () => {
+            // 在移动设备上默认隐藏信息面板
+            if (window.innerWidth <= 768) {
+                sidePanels.forEach(panel => {
+                    panel.style.display = 'none';
+                });
+            }
+        });
+    </script>
 </body>
 </html> 
